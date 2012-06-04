@@ -58,7 +58,7 @@ DCRIT=$3
 usage()
 {
 	echo "Usage: `basename $0` <service tag> <warning days> <critical days>"
-	exit 1
+	exit 3
 }
 
 # require exactly 3 parameters
