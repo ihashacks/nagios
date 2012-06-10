@@ -50,21 +50,34 @@
 
 GET="lynx -connect_timeout=30 -read_timeout=30 -dump -nocolor -nolist"
 DURL="http://support.dell.com/support/topics/global.aspx/support/my_systems_info/details?c=us&l=en&s=gen&servicetag="
-SVCTAG=$1
-DWARN=$2
-DCRIT=$3
 
 # help
 usage()
 {
-	echo "Usage: `basename $0` <service tag> <warning days> <critical days>"
+	echo "Usage: `basename $0` -s <service tag> -w <warning days> -c <critical days>"
 	exit 3
 }
 
-# require exactly 3 parameters
-if [ ${#@} -ne 3 ] ; then
-	usage
-fi
+# parse parameters and options
+while getopts ":s:w:c:" OPT; do
+	case "$OPT" in
+		s)
+			SVCTAG=$OPTARG
+			;;
+		w)
+			DWARN=$OPTARG
+			;;
+		c)
+			DCRIT=$OPTARG
+			;;
+		\?)
+			usage
+			;;
+		:)
+			usage
+			;;
+	esac
+done
 
 # retrieve the Dell warranty with most remaining days
 DAYSLEFT=`$GET "$DURL$SVCTAG" | \
