@@ -1,0 +1,96 @@
+#!/bin/bash
+#
+#	20120604 Brandon Pierce <brandon@ihashacks.com>
+#
+#	Checks the send or receive queue size of an Exchange server for thresholds
+#
+
+#
+# Sample Nagios command.cfg definition
+#
+#	# 'check_exch_queue' command definition
+#	define command {
+#		command_name	check_exch_queue
+#		command_line	$USER1$/check_exch_queue -H $HOSTADDRESS$ -q $ARG1$ -w $ARG2$ -c $ARG3$
+#	}
+
+#
+# Sample Nagios host entry
+#
+#	define service {
+#		host_name				Delta
+#		service_description		Exchange Send Queue
+#		is_volatile             0
+#	    check_period            24x7
+#	    max_check_attempts      3
+#	    normal_check_interval   5
+#	    retry_check_interval    1
+#	    contact_groups          nagiosadmins
+#	    notification_interval   120
+#	    notification_period     24x7
+#	    notification_options    c,r
+#	    check_command           check_exch_queue!send!15!25
+#	}
+
+CHKNT="/usr/lib/nagios/plugins/check_nt"
+PORT="12489"
+
+# help
+usage()
+{
+	echo "Usage: `basename $0` -H <server> -q [send,receive] -w <warning size> -c <critical size>"
+	exit 3
+}
+
+
+# parse parameters and options
+while getopts ":H:q:w:c:" OPT; do
+	case "$OPT" in
+		H)
+			SRV=$OPTARG
+			;;
+		q)
+			case "$OPTARG" in
+				receive)
+					EXQUEUE=ReceiveQueueSize
+					;;
+				send)
+					EXQUEUE=SendQueueSize
+					;;
+				*)
+					usage
+					;;
+			esac
+			;;
+		w)
+			SWARN=$OPTARG
+			;;
+		c)
+			SCRIT=$OPTARG
+			;;
+		\?)
+			usage
+			;;
+		:)
+			usage
+			;;
+	esac
+done
+
+# check receive queue
+QUEUELEN=`$CHKNT -H $SRV -p $PORT -v COUNTER -l "\\MSExchangeIS\$EXQUEUE"`
+
+# test it
+if [ ! -n "$QUEUELEN" ]; then
+	echo "Error retrieving data from Exchange"
+	exit 3
+elif [ $QUEUELEN -ge $SCRIT ]; then
+	echo "Receive queue is critical at $QUEUELEN messages"
+	exit 2
+elif [ $QUEUELEN -ge $SWARN ]; then
+	echo "Receive queue is warned at $QUEUELEN messages"
+	exit 1
+else
+	echo "Receive queue is within constraints at $QUEUELEN messages"
+	exit 0
+fi
