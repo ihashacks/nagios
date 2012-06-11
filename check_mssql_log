@@ -1,25 +1,56 @@
 #!/bin/bash
+
+################################################################################
+#	License
+################################################################################
 #
-#	20081126 Brandon Pierce <brandon@ihashacks.com>
+#	Copyright (c) 2008, 2012 Brandon Pierce <brandon@ihashacks.com>
 #
-#	Checks the transactional log sizes of a MSSQL2005 server for size thresholds
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+################################################################################
+#	Changelog
+################################################################################
+#
+#	Written 20081126 Brandon Pierce <brandon@ihashacks.com>
+#
+#		Checks the transactional log sizes of a MSSQL server for size thresholds
+#
+#	Updated 20120610
+#
+#		Merged the separate SQL 2000 script into this one.
+#		Making use of getopts. 
+#
+
+################################################################################
+#	Documentation
+################################################################################
 #
 # Sample Nagios command.cfg definition
 #
 #	# 'check_mssql_log' command definition
 #	define command {
 #		command_name	check_mssql_log
-#		command_line	$USER1$/check_mssql_log $HOSTADDRESS$ $USER7$ $USER8$ $ARG1$ $ARG2$ $ARG3$
+#		command_line	$USER1$/check_mssql_log -H $HOSTADDRESS$ -s $ARG1$ -u $USER7$ -p $USER8$ -d $ARG2$ -w $ARG3$ -c $ARG4$
 #	}
-
 #
 # Sample Nagios host entry
 #
 #	define service {
-#		host_name				Beta
-#		service_description		Syspro S DB Log Size
+#		host_name				Server
+#		service_description		NorthWind DB Log Size
 #		is_volatile             0
 #	    check_period            24x7
 #	    max_check_attempts      3
@@ -29,72 +60,83 @@
 #	    notification_interval   120
 #	    notification_period     24x7
 #	    notification_options    c,r
-#	    check_command           check_mssql_log!SolidStateCoS!1572864!3145728
+#	    check_command           check_mssql_log!2005!NorthWind!1572864!3145728
 #	}
-
+#
 
 SQLSH="/usr/bin/sqsh -m bcp -b"
-SRV=$1
-SQLU=$2
-SQLP=$3
-DB=$4
-SWARN=$5
-SCRIT=$6
 
-#
-# Help/Usage
-#
+# help
 usage()
 {
-	echo "Usage: `basename $0` <server> <user> <password> <database> <warning size (KB)> <critical size (KB)>"
-	exit 2	
+	echo "Usage: `basename $0` -H <server> -s <version> -u <user> -p <password> -d <database> -w <warning size (KB)> -c <critical size (KB)>"
+	exit 3	
 }
 
+# parse parameters and options
+while getopts ":H:s:u:p:d:w:c:" OPT; do
+	case "$OPT" in
+		H)
+			SRV=$OPTARG
+			;;
+		s)
+			case "$OPTARG" in
+				2000)
+					SQLTBL=sysperfinfo
+					;;
+				2005|2008)
+					SQLTBL=sys.dm_os_performance_counters
+					;;
+				*)
+					usage
+					;;
+			esac
+			;;
+		u)
+			SQLU=$OPTARG
+			;;
+		p)
+			SQLP=$OPTARG
+			;;
+		d)
+			DB=$OPTARG
+			;;
+		w)
+			SWARN=$OPTARG
+			;;
+		c)
+			SCRIT=$OPTARG
+			;;
+		\?)
+			usage
+			;;
+		:)
+			usage
+			;;
+	esac
+done
 
-#
-# We need all siz command line parameters or fail
-#
-if [ ${#@} -lt 6 ]; then
-	usage
-fi
-
-
-#
-# Size ONLY
-#
+# get the size
 LOGSIZE=`$SQLSH -S $SRV -U $SQLU -P $SQLP -C \
 	"SELECT counter_name,cntr_value,instance_name \
-	FROM sys.dm_os_performance_counters \
+	FROM $SQLTBL \
 	WHERE counter_name = 'Log File(s) Size (KB)' \
-	AND instance_name = '$DB'" 2> /dev/null \
-	| awk -F\| ' { print $2 } '`
-
-INTSIZE=`echo $LOGSIZE | \
+	AND instance_name = '$DB'" 2> /dev/null | \
+	awk -F\| ' { print $2 } ' | \
 	grep -o -e '[0-9]*\.' | \
 	sed 's/\.//g' \
 	`
-
-
-#
-# If we don't have any usable data, throw a Nagios error rather than generic
-# script failure
-#
-if [ -z $LOGSIZE ] || [ -z $INTSIZE ]; then
+# test it
+if [ ! -n "$LOGSIZE" ]; then
 	echo "Error retrieving log size"
+	exit 3
+elif [ $LOGSIZE -ge $SCRIT ]; then
+	echo "Size is critical at $LOGSIZE"
 	exit 2
-fi
-
-
-#
-# Test it
-#
-if [ $INTSIZE -ge $SCRIT ]; then
-	echo "Size is critical at $INTSIZE"
-	exit 2
-elif [ $INTSIZE -ge $SWARN ]; then
-	echo "Size is warned at $INTSIZE"
+elif [ $LOGSIZE -ge $SWARN ]; then
+	echo "Size is warned at $LOGSIZE"
 	exit 1
 else
-	echo "Size is within constraints at $INTSIZE"
+	echo "Size is within constraints at $LOGSIZE"
 	exit 0
 fi
