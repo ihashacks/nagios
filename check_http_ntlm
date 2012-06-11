@@ -26,7 +26,7 @@
 #
 #   Written 20110620 Brandon Pierce <brandon@ihashacks.com>
 #
-#   	Verifies that a web server can authentication NTLM
+#   	Verifies that a web server can authenticate NTLM
 #
 
 ################################################################################
