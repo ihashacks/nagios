@@ -1,10 +1,37 @@
 #!/bin/bash
+
+################################################################################
+#	License
+################################################################################
 #
-#   20110620 Brandon Pierce <brandon@ihashacks.com>
+#	Copyright (c) 2011 Brandon Pierce <brandon@ihashacks.com>
 #
-#   Verifies that a web server can authentication NTLM
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+################################################################################
+#	Changelog
+################################################################################
+#
+#   Written 20110620 Brandon Pierce <brandon@ihashacks.com>
+#
+#   	Verifies that a web server can authentication NTLM
+#
+
+################################################################################
+#	Documentation
+################################################################################
 #
 # Sample Nagios command.cfg definition
 # 
@@ -13,7 +40,6 @@
 #       command_name    check_http_ntlm
 #       command_line    $USER1$/check_http_ntlm $ARG1$ $USER3$
 #   }
-
 #
 # Sample Nagios host entry
 #
@@ -31,6 +57,7 @@
 #       notification_options    c,r
 #       check_command           check_http_ntlm!https://server.com
 #   }
+#
 
 PROG=/usr/bin/curl
 HOST=$1

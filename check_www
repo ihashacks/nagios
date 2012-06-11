@@ -1,13 +1,68 @@
 #!/bin/bash
+
+################################################################################
+#	License
+################################################################################
+#
+#	Copyright (c) 2004, 2005 Brandon Pierce <brandon@ihashacks.com>
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+################################################################################
+#	Changelog
+################################################################################
 #
 #	Written 20041213 by Brandon Pierce <brandon@ihashacks.com>
 #
-#       Takes an input URL and expected result and sets exit \
-#	code accordingly
+#       Takes an input URL and expected result and sets exit code accordingly
 #
-#	Modifications:
-#	20050304 by Brandon Pierce
-#	- Set output to include actual result searched for next to status
+#	Updated 20050304
+#
+#		Set output to include actual result searched for next to status
+#
+
+################################################################################
+#	Documentation
+################################################################################
+#
+# Sample Nagios command.cfg definition
+#
+#	# 'check_www' command definition
+#	define command {
+#		command_name	check_www
+#		command_line	$USER1$/check_www $ARG1$ $ARG2$
+#	}
+#
+# Sample Nagios host entry
+#
+#	define service {
+#		host_name				Server
+#		service_description		Site Text
+#		is_volatile             0
+#	    check_period            24x7
+#	    max_check_attempts      3
+#	    normal_check_interval   5
+#	    retry_check_interval    1
+#	    contact_groups          nagiosadmins
+#	    notification_interval   120
+#	    notification_period     24x7
+#	    notification_options    c,r
+#	    check_command           check_www!http://site.com!text
+#	}
+#
+
 
 # Uncomment for debugging
 #set -x
@@ -17,7 +72,7 @@ GET="/usr/bin/lwp-request"
 usage()
 {
 	echo "Usage: `basename $0` <url> <match>"
-	exit 1
+	exit 3
 }
 
 # We need to have two parameters and the first one must begin with http://
