@@ -47,6 +47,10 @@
 #		Added exit case when invalid service tag is input or some other
 #		failure occurs.
 #
+#	Updated 20120611
+#
+#		Switch from lynx to wget.
+#
 
 ################################################################################
 #	Documentation
@@ -79,7 +83,7 @@
 #
 
 
-GET="lynx -connect_timeout=30 -read_timeout=30 -dump -nocolor -nolist"
+GET="wget -q -T 30 -O -"
 DURL="http://support.dell.com/support/topics/global.aspx/support/my_systems_info/details?c=us&l=en&s=gen&servicetag="
 
 # help
