@@ -98,10 +98,13 @@ usage()
 }
 
 # parse parameters and options
-while getopts ":H:s:w:c:" OPT; do
+while getopts ":H:h:s:w:c:" OPT; do
 	case "$OPT" in
 		H)
 			SRV=$OPTARG
+			;;
+		h)
+			usage
 			;;
 		c)
 			COMMUNITY=$OPTARG
