@@ -32,6 +32,10 @@
 #
 #		Set output to include actual result searched for next to status
 #
+#	Updated 20120611
+#
+#		Cleanup
+#
 
 ################################################################################
 #	Documentation
@@ -63,12 +67,9 @@
 #	}
 #
 
+GET="/usr/bin/lwp-request -t 1m"
 
-# Uncomment for debugging
-#set -x
-
-GET="/usr/bin/lwp-request"
-
+# help
 usage()
 {
 	echo "Usage: `basename $0` <url> <match>"
@@ -80,12 +81,10 @@ if [ ${#@} -lt 2 ] || [ `echo $1 | sed -e'/^http\:\/\/.*\..*$/p' | wc -l` -lt 2 
 	usage
 fi
 
-#HOST=`echo $1 | sed -e 's/^http\:\/\///; s/\/.*//'`
+# get it
+$GET "$1" | grep -q -o -i "$2"
 
-# If the match is found, the return code is 0, otherwise puke
-$GET -t 1m "$1" | grep -q -o -i "$2"
-
-# check the return card from the grep
+# test it
 if [ "$?" -eq 0 ]; then
 	echo "Result found  - $2"
 	exit 0
