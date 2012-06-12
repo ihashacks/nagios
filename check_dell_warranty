@@ -93,7 +93,7 @@ DURL="http://support.dell.com/support/topics/global.aspx/support/my_systems_info
 # help
 usage()
 {
-		echo "Usage: `basename $0` -H <server> -c <community> -s <service tag> -w <warning days> -c <critical days>"
+		echo "Usage: `basename $0` -H <server> -c <community> -s <service tag | snmp> -w <warning days> -c <critical days>"
 	exit 3
 }
 
