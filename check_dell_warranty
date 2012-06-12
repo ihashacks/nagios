@@ -51,6 +51,10 @@
 #
 #		Switch from lynx to wget.
 #
+#	Updated 20120612
+#
+#		Added option to detect service tag via SNMP.
+#
 
 ################################################################################
 #	Documentation
@@ -61,7 +65,7 @@
 #	# 'check_dell_warranty' command definition
 #	define command {
 #		command_name	check_dell_warranty
-#		command_line	$USER1$/check_dell_warranty -s $ARG1$ -w $ARG2$ -c $ARG3$
+#		command_line	$USER1$/check_dell_warranty -H $HOSTADDRESS$ -s $ARG1$ -w $ARG2$ -c $ARG3$
 #	}
 #
 # Sample Nagios host entry
@@ -89,15 +93,28 @@ DURL="http://support.dell.com/support/topics/global.aspx/support/my_systems_info
 # help
 usage()
 {
-	echo "Usage: `basename $0` -s <service tag> -w <warning days> -c <critical days>"
+		echo "Usage: `basename $0` -H <server> -c <community> -s <service tag> -w <warning days> -c <critical days>"
 	exit 3
 }
 
 # parse parameters and options
-while getopts ":s:w:c:" OPT; do
+while getopts ":H:s:w:c:" OPT; do
 	case "$OPT" in
+		H)
+			SRV=$OPTARG
+			;;
+		c)
+			COMMUNITY=$OPTARG
+			;;
 		s)
-			SVCTAG=$OPTARG
+			case $OPTARG in
+				snmp)
+					SVCTAG=`snmpget -Ov -Oq -v 2c -c $COMMUNITY $SRV .1.3.6.1.4.1.674.10892.1.300.10.1.11.1 | sed -e 's/\"//g'`
+					;;
+				*)
+					SVCTAG=$OPTARG
+					;;
+			esac
 			;;
 		w)
 			DWARN=$OPTARG
