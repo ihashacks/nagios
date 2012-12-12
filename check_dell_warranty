@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/python
 
 ################################################################################
 #	License
@@ -55,10 +55,25 @@
 #
 #		Added option to detect service tag via SNMP.
 #
+#	Updated 20121125
+#
+#		Super-mega-mega Python re-write
+#		Switched to SOAP interface courtesy of Daniel De Marco <ddm@didiemme.net>
+#
 
 ################################################################################
 #	Documentation
 ################################################################################
+#
+# Debian/Ubuntu prereqs
+#
+#    apt-get install -y libsnmp-python python-suds
+#
+#
+# CentOS/RedHat prereqs (you will need the EPEL repo OR a pip install of argparse)
+#
+#    yum install -y net-snmp-python python-argparse python-suds  
+#
 #
 # Sample Nagios command.cfg definition
 #
@@ -66,6 +81,12 @@
 #	define command {
 #		command_name	check_dell_warranty
 #		command_line	$USER1$/check_dell_warranty -H $HOSTADDRESS$ -s $ARG1$ -w $ARG2$ -c $ARG3$
+#	}
+#
+#	# 'check_dell_warranty_snmp' command definition
+#	define command {
+#		command_name	check_dell_warranty_snmp
+#		command_line	$USER1$/check_dell_warranty_snmp -H $HOSTADDRESS$ -s $ARG1$ C community -w $ARG2$ -c $ARG3$
 #	}
 #
 # Sample Nagios host entry
@@ -87,72 +108,97 @@
 #
 
 
-GET="wget -q -T 30 -O -"
-DURL="http://support.dell.com/support/topics/global.aspx/support/my_systems_info/details?c=us&l=en&s=gen&servicetag="
+from datetime import date, datetime
+import argparse
+import netsnmp
+import suds
+import sys
+import uuid
 
-# help
-usage()
-{
-		echo "Usage: `basename $0` -H <server> -c <community> -s <service tag | snmp> -w <warning days> -c <critical days>"
-	exit 3
-}
 
 # parse parameters and options
-while getopts ":H:h:s:w:c:" OPT; do
-	case "$OPT" in
-		H)
-			SRV=$OPTARG
-			;;
-		h)
-			usage
-			;;
-		c)
-			COMMUNITY=$OPTARG
-			;;
-		s)
-			case $OPTARG in
-				snmp)
-					SVCTAG=`snmpget -Ov -Oq -v 2c -c $COMMUNITY $SRV .1.3.6.1.4.1.674.10892.1.300.10.1.11.1 | sed -e 's/\"//g'`
-					;;
-				*)
-					SVCTAG=$OPTARG
-					;;
-			esac
-			;;
-		w)
-			DWARN=$OPTARG
-			;;
-		c)
-			DCRIT=$OPTARG
-			;;
-		\?)
-			usage
-			;;
-		:)
-			usage
-			;;
-	esac
-done
+parser = argparse.ArgumentParser(description='Look up Dell warranty status')
 
-# retrieve the Dell warranty with most remaining days
-DAYSLEFT=`$GET "$DURL$SVCTAG" | \
-	grep -m 1 -o '\[[0-9]*\]' |\
-	sed -e 's/\[// ; s/\]//'`
+parser.add_argument('-H', dest='host', help='host name', required=True)
+parser.add_argument('-s', dest='service_tag', help='service tag or snmp lookup', required=True)
+parser.add_argument('-C', dest='community', help='snmp community string')
+parser.add_argument('-w', dest='warning', help='warning days', required=True, type=int)
+parser.add_argument('-c', dest='critical', help='critical days', required=True, type=int)
 
-# test it
-if [ ! -n "$DAYSLEFT" ]; then
-	echo "Unable to verify the Service Tag"
-	exit 3
-elif [ $DAYSLEFT -le "0" ]; then
-	echo "Warranty has expired for <a href=$DURL$SVCTAG>$SVCTAG</a>"
-	exit 2
-elif [ $DAYSLEFT -le $DCRIT ]; then
-	echo "Warranty expires in $DAYSLEFT days for <a href=$DURL$SVCTAG>$SVCTAG</a>"
-	exit 2
-elif [ $DAYSLEFT -le $DWARN ]; then
-	echo "Warranty expires in $DAYSLEFT days for <a href=$DURL$SVCTAG>$SVCTAG</a>"
-	exit 1
-else
-	echo "Warranty expires in $DAYSLEFT days for <a href=$DURL$SVCTAG>$SVCTAG</a>"
-	exit 0
-fi
+args = parser.parse_args()
+
+
+# set variables based on parameters
+community = args.community
+dayswarn = args.warning
+dayscrit = args.critical
+host = args.host
+if dayswarn <= dayscrit:
+    print "error: warn time must be greater than critical time"
+    sys.exit(3)
+svctag = args.service_tag
+if svctag == 'snmp':
+    if community is None:
+        print "error: SNMP community not defined with -C"
+        print parser.print_help()
+        sys.exit(3)
+    var = netsnmp.Varbind('.1.3.6.1.4.1.674.10892.1.300.10.1.11.1')
+    res = netsnmp.snmpget(var, Version=1, DestHost=host, Community=community)
+    svctag = res[0]
+    if svctag is None:
+        print 'error: SNMP communitcation error'
+        sys.exit(3)
+uuid = uuid.uuid4()
+
+
+# get warranty
+def get_asset_info(svctag):
+    url = 'http://xserv.dell.com/services/assetservice.asmx?WSDL'
+    client = suds.client.Client(url)
+    res=client.service.GetAssetInformation(uuid, 'check_dell_warranty', svctag)
+    if res == '':
+        print 'error: error retrieving system information from Dell'
+        sys.exit(3)
+
+    hdrdata=res['Asset'][0]['AssetHeaderData']
+    ent=res['Asset'][0]['Entitlements'][0]
+
+    systype=hdrdata['SystemType']
+    sysmodel=hdrdata['SystemModel']
+    warrs=[]
+    for i in ent:
+        if i==None:
+            continue
+        warrs.append(i['EndDate'])
+
+    warrs.sort()
+    endwarranty=warrs[-1]
+
+    return systype, sysmodel, svctag, endwarranty.strftime('%m/%d/%Y')
+
+
+# main
+if __name__ == "__main__":
+    (systype, sysmodel, svctag, endw)=get_asset_info(svctag)
+
+    # calculate days between now and warranty expiration
+    now=datetime.now()
+    endwtime=datetime.strptime(endw, '%m/%d/%Y')
+    daysend = int((endwtime - now).days)
+
+    # expired
+    if daysend <= 0:
+        print 'The warranty for',systype, sysmodel, 'with service tag', svctag, 'expired', abs(daysend), 'days ago on', endw
+        sys.exit(2)
+    # about to expire
+    elif daysend <= dayscrit:
+        print 'The warranty for',systype, sysmodel, 'with service tag', svctag, 'expires in', daysend, 'days on', endw
+        sys.exit(2)
+    # expires soon
+    elif daysend <= dayswarn:
+        print 'The warranty for',systype, sysmodel, 'with service tag', svctag, 'expires in', daysend, 'days on', endw
+        sys.exit(1)
+    # gravy
+    else:
+        print 'The warranty for',systype, sysmodel, 'with service tag', svctag, 'expires in', daysend, 'days on', endw
+        sys.exit(0)
