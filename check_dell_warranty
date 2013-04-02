@@ -146,7 +146,7 @@ if svctag == 'snmp':
     res = netsnmp.snmpget(var, Version=1, DestHost=host, Community=community)
     svctag = res[0]
     if svctag is None:
-        print 'error: SNMP communitcation error'
+        print 'error: SNMP communication error'
         sys.exit(3)
 uuid = uuid.uuid4()
 
