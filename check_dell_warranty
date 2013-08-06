@@ -1,4 +1,5 @@
 #!/usr/bin/python
+""" Nagios plugin to check the Dell warranty status from Dell's website"""
 
 ################################################################################
 #	License
@@ -70,7 +71,8 @@
 #    apt-get install -y libsnmp-python python-suds
 #
 #
-# CentOS/RedHat prereqs (you will need the EPEL repo OR a pip install of argparse)
+# CentOS/RedHat prereqs (you will need the EPEL repo OR
+# a pip install of argparse)
 #
 #    yum install -y net-snmp-python python-argparse python-suds  
 #
@@ -107,8 +109,7 @@
 #	}
 #
 
-
-from datetime import date, datetime
+from datetime import datetime
 import argparse
 import netsnmp
 import suds
@@ -119,11 +120,27 @@ import uuid
 # parse parameters and options
 parser = argparse.ArgumentParser(description='Look up Dell warranty status')
 
-parser.add_argument('-H', dest='host', help='host name', required=True)
-parser.add_argument('-s', dest='service_tag', help='service tag or snmp lookup', required=True)
-parser.add_argument('-C', dest='community', help='snmp community string')
-parser.add_argument('-w', dest='warning', help='warning days', required=True, type=int)
-parser.add_argument('-c', dest='critical', help='critical days', required=True, type=int)
+parser.add_argument('-H',
+    dest='host',
+    help='host name',
+    required=True)
+parser.add_argument('-s',
+    dest='service_tag',
+    help='service tag or snmp lookup',
+    required=True)
+parser.add_argument('-C',
+    dest='community',
+    help='snmp community string')
+parser.add_argument('-w',
+    dest='warning',
+    help='warning days',
+    required=True,
+    type=int)
+parser.add_argument('-c',
+    dest='critical',
+    help='critical days',
+    required=True,
+    type=int)
 
 args = parser.parse_args()
 
@@ -153,26 +170,29 @@ uuid = uuid.uuid4()
 
 # get warranty
 def get_asset_info(svctag):
+    """ look up and return system info"""
     url = 'http://xserv.dell.com/services/assetservice.asmx?WSDL'
     client = suds.client.Client(url)
-    res=client.service.GetAssetInformation(uuid, 'check_dell_warranty', svctag)
+    res = client.service.GetAssetInformation(uuid,
+        'check_dell_warranty',
+        svctag)
     if res == '':
         print 'error: error retrieving system information from Dell'
         sys.exit(3)
 
-    hdrdata=res['Asset'][0]['AssetHeaderData']
-    ent=res['Asset'][0]['Entitlements'][0]
+    hdrdata = res['Asset'][0]['AssetHeaderData']
+    ent = res['Asset'][0]['Entitlements'][0]
 
-    systype=hdrdata['SystemType']
-    sysmodel=hdrdata['SystemModel']
-    warrs=[]
+    systype = hdrdata['SystemType']
+    sysmodel = hdrdata['SystemModel']
+    warrs = []
     for i in ent:
-        if i==None:
+        if i == None:
             continue
         warrs.append(i['EndDate'])
 
     warrs.sort()
-    endwarranty=warrs[-1]
+    endwarranty = warrs[-1]
 
     return systype, sysmodel, svctag, endwarranty.strftime('%m/%d/%Y')
 
@@ -182,23 +202,27 @@ if __name__ == "__main__":
     (systype, sysmodel, svctag, endw)=get_asset_info(svctag)
 
     # calculate days between now and warranty expiration
-    now=datetime.now()
-    endwtime=datetime.strptime(endw, '%m/%d/%Y')
+    now = datetime.now()
+    endwtime = datetime.strptime(endw, '%m/%d/%Y')
     daysend = int((endwtime - now).days)
 
     # expired
     if daysend <= 0:
-        print 'The warranty for',systype, sysmodel, 'with service tag', svctag, 'expired', abs(daysend), 'days ago on', endw
+        print 'The warranty for', systype, sysmodel, 'with service tag', \
+        svctag, 'expired', abs(daysend), 'days ago on', endw
         sys.exit(2)
     # about to expire
     elif daysend <= dayscrit:
-        print 'The warranty for',systype, sysmodel, 'with service tag', svctag, 'expires in', daysend, 'days on', endw
+        print 'The warranty for', systype, sysmodel, 'with service tag', \
+        svctag, 'expires in', daysend, 'days on', endw
         sys.exit(2)
     # expires soon
     elif daysend <= dayswarn:
-        print 'The warranty for',systype, sysmodel, 'with service tag', svctag, 'expires in', daysend, 'days on', endw
+        print 'The warranty for', systype, sysmodel, 'with service tag', \
+        svctag, 'expires in', daysend, 'days on', endw
         sys.exit(1)
     # gravy
     else:
-        print 'The warranty for',systype, sysmodel, 'with service tag', svctag, 'expires in', daysend, 'days on', endw
+        print 'The warranty for', systype, sysmodel, 'with service tag', \
+        svctag, 'expires in', daysend, 'days on', endw
         sys.exit(0)
