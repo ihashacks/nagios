@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+""" Nagios plugin to check service status """
+
+import argparse
+import shlex
+import subprocess
+import sys
+
+
+# parse parameters and options
+parser = argparse.ArgumentParser(description='Check status of a Linux system service')
+
+parser.add_argument('--service-name',
+                    dest='servicename',
+                    help='name of service to check',
+                    required=True)
+parser.add_argument('--service-type',
+                    dest='servicetype',
+                    help='type of service to check',
+                    required=True)
+
+args = parser.parse_args()
+
+servicename = args.servicename
+servicetype = args.servicetype
+
+
+# define service command
+def set_service_command(servicename, servicetype):
+    if servicetype == "sysv":
+        servicecommand = '/sbin/service '
+        servicecommandargs = servicename + ' status'
+    elif servicetype == "systemd":
+        servicecommand = '/bin/systemctl '
+        servicecommandargs = 'status ' + servicename + '.service'
+    elif servicetype == "upstart":
+        servicecommand = '/usr/sbin/service '
+        servicecommandargs = servicename + ' status' + ' \| grep start'
+    else:
+        print "Service type %s is unknown" % (servicetype)
+        sys.exit(3)
+
+    return servicecommand, servicecommandargs
+
+
+# get service status
+def get_service_status(servicecommand, servicecommandargs):
+    cmd = shlex.split(servicecommand + servicecommandargs)
+    servicestatus = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    return servicestatus
+
+
+# main
+if __name__ == "__main__":
+    (servicecommand, servicecommandargs) = set_service_command(servicename, servicetype)
+    (servicestatus) = get_service_status(servicecommand, servicecommandargs)
+
+    if servicestatus == 0:
+        print "Service %s is running" % (servicename)
+        sys.exit(0)
+    elif servicestatus == 127:
+        print "Unable to run service command %s" % (servicecommand)
+        sys.exit(3)
+    elif servicestatus >= 1:
+        print "Service %s is not running" % (servicename)
+        sys.exit(2)
+    else:
+        print "Service %s is unknown" % (servicename)
+        sys.exit(3)
