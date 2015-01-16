@@ -1,118 +1,10 @@
 #!/usr/bin/python
 """ Nagios plugin to check the Dell warranty status from Dell's website"""
 
-################################################################################
-#	License
-################################################################################
-#
-#	Copyright (c) 2008, 2011, 2012 Brandon Pierce <brandon@ihashacks.com>
-#
-#	This program is free software: you can redistribute it and/or modify
-#	it under the terms of the GNU General Public License as published by
-#	the Free Software Foundation, either version 3 of the License, or
-#	(at your option) any later version.
-#
-#	This program is distributed in the hope that it will be useful,
-#	but WITHOUT ANY WARRANTY; without even the implied warranty of
-#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#	GNU General Public License for more details.
-#
-#	You should have received a copy of the GNU General Public License
-#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-
-################################################################################
-#	Changelog
-################################################################################
-#
-#	Written 20081222 by Brandon Pierce <brandon@ihashacks.com>
-#
-#       Checks the remainder of a Dell warranty using a service tag
-#
-#	Updated 20110318
-#
-#		Picks longest lasting warranty date when multiple warranty or 
-#		warranty types are listed
-#
-#	Updated 20110830
-#
-#		Included a link to the warranty site in the status output. Must have
-#		escape_html_tags=0 set in your cgi.cfg
-#
-#		Added timeout options to lynx to hopefully resolve false positive
-#		when the Dell site is slow to respond.
-#
-#	Updated 20120603
-#
-#		Overhaul this damn thing to work with Dell's re-done support site.
-#		Added exit case when invalid service tag is input or some other
-#		failure occurs.
-#
-#	Updated 20120611
-#
-#		Switch from lynx to wget.
-#
-#	Updated 20120612
-#
-#		Added option to detect service tag via SNMP.
-#
-#	Updated 20121125
-#
-#		Super-mega-mega Python re-write
-#		Switched to SOAP interface courtesy of Daniel De Marco <ddm@didiemme.net>
-#
-
-################################################################################
-#	Documentation
-################################################################################
-#
-# Debian/Ubuntu prereqs
-#
-#    apt-get install -y libsnmp-python python-suds
-#
-#
-# CentOS/RedHat prereqs (you will need the EPEL repo OR
-# a pip install of argparse)
-#
-#    yum install -y net-snmp-python python-argparse python-suds  
-#
-#
-# Sample Nagios command.cfg definition
-#
-#	# 'check_dell_warranty' command definition
-#	define command {
-#		command_name	check_dell_warranty
-#		command_line	$USER1$/check_dell_warranty -H $HOSTADDRESS$ -s $ARG1$ -w $ARG2$ -c $ARG3$
-#	}
-#
-#	# 'check_dell_warranty_snmp' command definition
-#	define command {
-#		command_name	check_dell_warranty_snmp
-#		command_line	$USER1$/check_dell_warranty_snmp -H $HOSTADDRESS$ -s $ARG1$ C community -w $ARG2$ -c $ARG3$
-#	}
-#
-# Sample Nagios host entry
-#
-#	define service {
-#		host_name				Server
-#		service_description		Dell Warranty
-#		is_volatile             0
-#	    check_period            24x7
-#	    max_check_attempts      3
-#	    normal_check_interval   5
-#	    retry_check_interval    1
-#	    contact_groups          nagiosadmins
-#	    notification_interval   120
-#	    notification_period     24x7
-#	    notification_options    c,r
-#	    check_command           check_dell_warranty!SVCTAG1!30!15
-#	}
-#
-
 from datetime import datetime
 import argparse
 import netsnmp
-import suds
+from suds.client import Client
 import sys
 import uuid
 
@@ -121,26 +13,26 @@ import uuid
 parser = argparse.ArgumentParser(description='Look up Dell warranty status')
 
 parser.add_argument('-H',
-    dest='host',
-    help='host name',
-    required=True)
+                    dest='host',
+                    help='host name',
+                    required=True)
 parser.add_argument('-s',
-    dest='service_tag',
-    help='service tag or snmp lookup',
-    required=True)
+                    dest='service_tag',
+                    help='service tag or snmp lookup',
+                    required=True)
 parser.add_argument('-C',
-    dest='community',
-    help='snmp community string')
+                    dest='community',
+                    help='snmp community string')
 parser.add_argument('-w',
-    dest='warning',
-    help='warning days',
-    required=True,
-    type=int)
+                    dest='warning',
+                    help='warning days',
+                    required=True,
+                    type=int)
 parser.add_argument('-c',
-    dest='critical',
-    help='critical days',
-    required=True,
-    type=int)
+                    dest='critical',
+                    help='critical days',
+                    required=True,
+                    type=int)
 
 args = parser.parse_args()
 
@@ -172,10 +64,10 @@ uuid = uuid.uuid4()
 def get_asset_info(svctag):
     """ look up and return system info"""
     url = 'http://xserv.dell.com/services/assetservice.asmx?WSDL'
-    client = suds.client.Client(url)
+    client = Client(url, location=url)
     res = client.service.GetAssetInformation(uuid,
-        'check_dell_warranty',
-        svctag)
+                                             'check_dell_warranty',
+                                             svctag)
     if res == '':
         print 'error: error retrieving system information from Dell'
         sys.exit(3)
@@ -187,7 +79,7 @@ def get_asset_info(svctag):
     sysmodel = hdrdata['SystemModel']
     warrs = []
     for i in ent:
-        if i == None:
+        if i is None:
             continue
         warrs.append(i['EndDate'])
 
@@ -199,7 +91,7 @@ def get_asset_info(svctag):
 
 # main
 if __name__ == "__main__":
-    (systype, sysmodel, svctag, endw)=get_asset_info(svctag)
+    (systype, sysmodel, svctag, endw) = get_asset_info(svctag)
 
     # calculate days between now and warranty expiration
     now = datetime.now()
@@ -209,20 +101,20 @@ if __name__ == "__main__":
     # expired
     if daysend <= 0:
         print 'The warranty for', systype, sysmodel, 'with service tag', \
-        svctag, 'expired', abs(daysend), 'days ago on', endw
+            svctag, 'expired', abs(daysend), 'days ago on', endw
         sys.exit(2)
     # about to expire
     elif daysend <= dayscrit:
         print 'The warranty for', systype, sysmodel, 'with service tag', \
-        svctag, 'expires in', daysend, 'days on', endw
+            svctag, 'expires in', daysend, 'days on', endw
         sys.exit(2)
     # expires soon
     elif daysend <= dayswarn:
         print 'The warranty for', systype, sysmodel, 'with service tag', \
-        svctag, 'expires in', daysend, 'days on', endw
+            svctag, 'expires in', daysend, 'days on', endw
         sys.exit(1)
     # gravy
     else:
         print 'The warranty for', systype, sysmodel, 'with service tag', \
-        svctag, 'expires in', daysend, 'days on', endw
+            svctag, 'expires in', daysend, 'days on', endw
         sys.exit(0)
