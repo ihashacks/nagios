@@ -1,0 +1,103 @@
+#!/bin/bash
+
+################################################################################
+#	License
+################################################################################
+#
+#	Copyright (c) 2014 Brandon Pierce <brandon@ihashacks.com>
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+################################################################################
+#	Documentation
+################################################################################
+#
+# Sample Nagios command.cfg definition
+#
+#	# 'check_mssql_health' command definition
+#	define command {
+#		command_name	check_mssql_health
+#		command_line	$USER1$/check_mssql_health -H $HOSTADDRESS$ -u $USER7$ -p $USER8$ -d $ARG1$
+#	}
+#
+# Sample Nagios host entry
+#
+#	define service {
+#		host_name				Server
+#		service_description		NorthWind DB Health
+#		is_volatile             0
+#	    check_period            24x7
+#	    max_check_attempts      3
+#	    normal_check_interval   5
+#	    retry_check_interval    1
+#	    contact_groups          nagiosadmins
+#	    notification_interval   120
+#	    notification_period     24x7
+#	    notification_options    c,r
+#	    check_command           check_mssql_health!NorthWind
+#	}
+#
+
+SQLSH="/usr/bin/sqsh -m bcp -b"
+
+# help
+usage()
+{
+	echo "Usage: `basename $0` -H <server> -u <user> -p <password> -d <database>"
+	exit 3	
+}
+
+# parse parameters and options
+while getopts ":H:u:p:d:" OPT; do
+	case "$OPT" in
+		H)
+			SRV=$OPTARG
+			;;
+		u)
+			SQLU=$OPTARG
+			;;
+		p)
+			SQLP=$OPTARG
+			;;
+		d)
+			DB=$OPTARG
+			;;
+		\?)
+			usage
+			;;
+		:)
+			usage
+			;;
+	esac
+done
+
+# get the size
+NUMERRORS=`$SQLSH -S $SRV -U $SQLU -P $SQLP -C \
+	"DBCC CHECKDB($DB)" 2> /dev/null | \
+	grep ^CHECKDB | \
+	awk ' { print $3 "+" $7 } ' | \
+	bc
+	`
+# test it
+if [ ! -n "$NUMERRORS" ]; then
+	echo "Error running consistency check"
+	exit 3
+elif [ $NUMERRORS -ge 1 ]; then
+	echo "Number of errors is critical at $NUMERRORS"
+	exit 2
+else
+	echo "Number of errors is safe at $NUMERRORS"
+	exit 0
+fi
